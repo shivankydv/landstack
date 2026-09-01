@@ -8,10 +8,16 @@ import com.landstack.backend.repository.LandParcelRepository;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import jakarta.persistence.criteria.Predicate;
 
 @Service
 public class LandParcelService {
@@ -38,6 +44,80 @@ public class LandParcelService {
                 );
 
         return toDto(parcel);
+    }
+
+    public Page<LandParcelDto> searchParcels(
+            String ulpin,
+            String name,
+            String propertyType,
+            String address,
+            Double minArea,
+            Double maxArea,
+            Pageable pageable) {
+
+        Specification<LandParcel> specification = (root, query, criteriaBuilder) -> {
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (ulpin != null && !ulpin.isBlank()) {
+                predicates.add(
+                        criteriaBuilder.equal(root.get("ulpin"), ulpin)
+                );
+            }
+
+            if (name != null && !name.isBlank()) {
+                predicates.add(
+                        criteriaBuilder.like(
+                                criteriaBuilder.lower(root.get("name")),
+                                "%" + name.toLowerCase() + "%"
+                        )
+                );
+            }
+
+            if (propertyType != null && !propertyType.isBlank()) {
+                predicates.add(
+                        criteriaBuilder.equal(
+                                criteriaBuilder.lower(root.get("propertyType")),
+                                propertyType.toLowerCase()
+                        )
+                );
+            }
+
+            if (address != null && !address.isBlank()) {
+                predicates.add(
+                        criteriaBuilder.like(
+                                criteriaBuilder.lower(root.get("address")),
+                                "%" + address.toLowerCase() + "%"
+                        )
+                );
+            }
+
+            if (minArea != null) {
+                predicates.add(
+                        criteriaBuilder.greaterThanOrEqualTo(
+                                root.get("area"),
+                                minArea
+                        )
+                );
+            }
+
+            if (maxArea != null) {
+                predicates.add(
+                        criteriaBuilder.lessThanOrEqualTo(
+                                root.get("area"),
+                                maxArea
+                        )
+                );
+            }
+
+            return criteriaBuilder.and(
+                    predicates.toArray(new Predicate[0])
+            );
+        };
+
+        return landParcelRepository
+                .findAll(specification, pageable)
+                .map(this::toDto);
     }
 
     private LandParcelDto toDto(LandParcel parcel) {
@@ -69,6 +149,7 @@ public class LandParcelService {
         }
 
         LandParcel parcel = new LandParcel();
+
         parcel.setUlpin(dto.getUlpin());
 
         applyDtoToEntity(dto, parcel);
@@ -87,7 +168,7 @@ public class LandParcelService {
                         )
                 );
 
-        // ULPIN itself is not changed via update; it's the lookup key
+        // ULPIN itself is not changed via update; it is the lookup key
         applyDtoToEntity(dto, parcel);
 
         LandParcel updatedParcel = landParcelRepository.save(parcel);
@@ -129,6 +210,7 @@ public class LandParcelService {
             );
 
             point.setSRID(4326);
+
             parcel.setGeometry(point);
         }
     }
