@@ -9,4 +9,5 @@ public interface LandParcelRepository extends JpaRepository<LandParcel, Long> {
 
     Optional<LandParcel> findByUlpin(String ulpin);
 
+    boolean existsByUlpin(String ulpin);
 }

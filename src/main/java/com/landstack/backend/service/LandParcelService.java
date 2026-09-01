@@ -2,11 +2,15 @@ package com.landstack.backend.service;
 
 import com.landstack.backend.dto.LandParcelDto;
 import com.landstack.backend.entity.LandParcel;
+import com.landstack.backend.exception.DuplicateResourceException;
+import com.landstack.backend.exception.ResourceNotFoundException;
 import com.landstack.backend.repository.LandParcelRepository;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,7 +32,9 @@ public class LandParcelService {
     public LandParcelDto getByUlpin(String ulpin) {
         LandParcel parcel = landParcelRepository.findByUlpin(ulpin)
                 .orElseThrow(() ->
-                        new NoSuchElementException("Parcel not found: " + ulpin)
+                        new ResourceNotFoundException(
+                                "Parcel not found: " + ulpin
+                        )
                 );
 
         return toDto(parcel);
@@ -53,11 +59,56 @@ public class LandParcelService {
 
         return dto;
     }
+
     public LandParcelDto createParcel(LandParcelDto dto) {
 
-        LandParcel parcel = new LandParcel();
+        if (landParcelRepository.existsByUlpin(dto.getUlpin())) {
+            throw new DuplicateResourceException(
+                    "Parcel already exists with ULPIN: " + dto.getUlpin()
+            );
+        }
 
+        LandParcel parcel = new LandParcel();
         parcel.setUlpin(dto.getUlpin());
+
+        applyDtoToEntity(dto, parcel);
+
+        LandParcel savedParcel = landParcelRepository.save(parcel);
+
+        return toDto(savedParcel);
+    }
+
+    public LandParcelDto updateParcel(String ulpin, LandParcelDto dto) {
+
+        LandParcel parcel = landParcelRepository.findByUlpin(ulpin)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Parcel not found: " + ulpin
+                        )
+                );
+
+        // ULPIN itself is not changed via update; it's the lookup key
+        applyDtoToEntity(dto, parcel);
+
+        LandParcel updatedParcel = landParcelRepository.save(parcel);
+
+        return toDto(updatedParcel);
+    }
+
+    public void deleteParcel(String ulpin) {
+
+        LandParcel parcel = landParcelRepository.findByUlpin(ulpin)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Parcel not found: " + ulpin
+                        )
+                );
+
+        landParcelRepository.delete(parcel);
+    }
+
+    private void applyDtoToEntity(LandParcelDto dto, LandParcel parcel) {
+
         parcel.setName(dto.getName());
         parcel.setPropertyType(dto.getPropertyType());
         parcel.setPlotReference(dto.getPlotReference());
@@ -67,23 +118,18 @@ public class LandParcelService {
         parcel.setDemoData(dto.isDemoData());
 
         if (dto.getLatitude() != null && dto.getLongitude() != null) {
-            org.locationtech.jts.geom.GeometryFactory geometryFactory =
-                    new org.locationtech.jts.geom.GeometryFactory();
 
-            org.locationtech.jts.geom.Point point =
-                    geometryFactory.createPoint(
-                            new org.locationtech.jts.geom.Coordinate(
-                                    dto.getLongitude(),
-                                    dto.getLatitude()
-                            )
-                    );
+            GeometryFactory geometryFactory = new GeometryFactory();
+
+            Point point = geometryFactory.createPoint(
+                    new Coordinate(
+                            dto.getLongitude(),
+                            dto.getLatitude()
+                    )
+            );
 
             point.setSRID(4326);
             parcel.setGeometry(point);
         }
-
-        LandParcel savedParcel = landParcelRepository.save(parcel);
-
-        return toDto(savedParcel);
     }
 }
