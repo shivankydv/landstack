@@ -58,4 +58,8 @@ public class DocumentController {
 
         return ResponseEntity.noContent().build();
     }
+    @PutMapping("/{id}/verify")
+    public DocumentDto verifyDocument(@PathVariable Long id) {
+        return documentService.verifyDocument(id);
+    }
 }

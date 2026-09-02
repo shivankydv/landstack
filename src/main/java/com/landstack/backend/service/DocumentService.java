@@ -16,17 +16,19 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final LandParcelRepository landParcelRepository;
+    private final AuditLogService auditLogService;
 
     public DocumentService(
             DocumentRepository documentRepository,
-            LandParcelRepository landParcelRepository) {
+            LandParcelRepository landParcelRepository,
+            AuditLogService auditLogService) {
 
         this.documentRepository = documentRepository;
         this.landParcelRepository = landParcelRepository;
+        this.auditLogService = auditLogService;
     }
 
     public List<DocumentDto> getAllDocuments() {
-
         return documentRepository.findAll()
                 .stream()
                 .map(this::toDto)
@@ -34,7 +36,6 @@ public class DocumentService {
     }
 
     public DocumentDto getDocumentById(Long id) {
-
         Document document = documentRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
@@ -46,7 +47,6 @@ public class DocumentService {
     }
 
     public List<DocumentDto> getDocumentsByParcel(String ulpin) {
-
         if (!landParcelRepository.existsByUlpin(ulpin)) {
             throw new ResourceNotFoundException(
                     "Parcel not found: " + ulpin
@@ -65,7 +65,8 @@ public class DocumentService {
                 .findByUlpin(dto.getParcelUlpin())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Parcel not found: " + dto.getParcelUlpin()
+                                "Parcel not found: "
+                                        + dto.getParcelUlpin()
                         )
                 );
 
@@ -86,6 +87,15 @@ public class DocumentService {
         Document savedDocument =
                 documentRepository.save(document);
 
+        auditLogService.log(
+                "DOCUMENT",
+                String.valueOf(savedDocument.getId()),
+                "CREATED",
+                "system",
+                "Document created for parcel "
+                        + savedDocument.getParcel().getUlpin()
+        );
+
         return toDto(savedDocument);
     }
 
@@ -104,7 +114,8 @@ public class DocumentService {
                 .findByUlpin(dto.getParcelUlpin())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Parcel not found: " + dto.getParcelUlpin()
+                                "Parcel not found: "
+                                        + dto.getParcelUlpin()
                         )
                 );
 
@@ -123,7 +134,40 @@ public class DocumentService {
         Document updatedDocument =
                 documentRepository.save(document);
 
+        auditLogService.log(
+                "DOCUMENT",
+                String.valueOf(updatedDocument.getId()),
+                "UPDATED",
+                "system",
+                "Document updated"
+        );
+
         return toDto(updatedDocument);
+    }
+
+    public DocumentDto verifyDocument(Long id) {
+
+        Document document = documentRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Document not found: " + id
+                        )
+                );
+
+        document.setVerificationStatus("VERIFIED");
+
+        Document verifiedDocument =
+                documentRepository.save(document);
+
+        auditLogService.log(
+                "DOCUMENT",
+                String.valueOf(verifiedDocument.getId()),
+                "VERIFIED",
+                "admin",
+                "Document verified successfully"
+        );
+
+        return toDto(verifiedDocument);
     }
 
     public void deleteDocument(Long id) {
@@ -135,6 +179,14 @@ public class DocumentService {
                         )
                 );
 
+        auditLogService.log(
+                "DOCUMENT",
+                String.valueOf(document.getId()),
+                "DELETED",
+                "system",
+                "Document deleted"
+        );
+
         documentRepository.delete(document);
     }
 
@@ -143,21 +195,27 @@ public class DocumentService {
         DocumentDto dto = new DocumentDto();
 
         dto.setId(document.getId());
+
         dto.setParcelUlpin(
                 document.getParcel().getUlpin()
         );
+
         dto.setDocumentType(
                 document.getDocumentType()
         );
+
         dto.setDocumentNumber(
                 document.getDocumentNumber()
         );
+
         dto.setDocumentDate(
                 document.getDocumentDate()
         );
+
         dto.setStatus(
                 document.getStatus()
         );
+
         dto.setVerificationStatus(
                 document.getVerificationStatus()
         );
