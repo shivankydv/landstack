@@ -13,19 +13,34 @@ import java.util.stream.Collectors;
 public class OwnerService {
 
     private final OwnerRepository ownerRepository;
+    private final AuditLogService auditLogService;
 
-    public OwnerService(OwnerRepository ownerRepository) {
+    public OwnerService(
+            OwnerRepository ownerRepository,
+            AuditLogService auditLogService) {
+
         this.ownerRepository = ownerRepository;
+        this.auditLogService = auditLogService;
     }
 
+    // =========================
+    // Get all owners
+    // =========================
+
     public List<OwnerDto> getAllOwners() {
+
         return ownerRepository.findAll()
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
+    // =========================
+    // Get owner by ID
+    // =========================
+
     public OwnerDto getOwnerById(Long id) {
+
         Owner owner = ownerRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
@@ -36,18 +51,38 @@ public class OwnerService {
         return toDto(owner);
     }
 
+    // =========================
+    // Create owner
+    // =========================
+
     public OwnerDto createOwner(OwnerDto dto) {
 
         Owner owner = new Owner();
 
         applyDtoToEntity(dto, owner);
 
-        Owner savedOwner = ownerRepository.save(owner);
+        Owner savedOwner =
+                ownerRepository.save(owner);
+
+        // Automatic audit log
+        auditLogService.log(
+                "OWNER",
+                String.valueOf(savedOwner.getId()),
+                "CREATED",
+                "system",
+                "Owner created"
+        );
 
         return toDto(savedOwner);
     }
 
-    public OwnerDto updateOwner(Long id, OwnerDto dto) {
+    // =========================
+    // Update owner
+    // =========================
+
+    public OwnerDto updateOwner(
+            Long id,
+            OwnerDto dto) {
 
         Owner owner = ownerRepository.findById(id)
                 .orElseThrow(() ->
@@ -58,10 +93,24 @@ public class OwnerService {
 
         applyDtoToEntity(dto, owner);
 
-        Owner updatedOwner = ownerRepository.save(owner);
+        Owner updatedOwner =
+                ownerRepository.save(owner);
+
+        // Automatic audit log
+        auditLogService.log(
+                "OWNER",
+                String.valueOf(updatedOwner.getId()),
+                "UPDATED",
+                "system",
+                "Owner updated"
+        );
 
         return toDto(updatedOwner);
     }
+
+    // =========================
+    // Delete owner
+    // =========================
 
     public void deleteOwner(Long id) {
 
@@ -72,16 +121,35 @@ public class OwnerService {
                         )
                 );
 
+        // Create audit before deleting
+        auditLogService.log(
+                "OWNER",
+                String.valueOf(owner.getId()),
+                "DELETED",
+                "system",
+                "Owner deleted"
+        );
+
         ownerRepository.delete(owner);
     }
 
-    private void applyDtoToEntity(OwnerDto dto, Owner owner) {
+    // =========================
+    // Apply DTO → Entity
+    // =========================
+
+    private void applyDtoToEntity(
+            OwnerDto dto,
+            Owner owner) {
 
         owner.setName(dto.getName());
         owner.setEmail(dto.getEmail());
         owner.setPhone(dto.getPhone());
         owner.setAddress(dto.getAddress());
     }
+
+    // =========================
+    // Entity → DTO
+    // =========================
 
     private OwnerDto toDto(Owner owner) {
 

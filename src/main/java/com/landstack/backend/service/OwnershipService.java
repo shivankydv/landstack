@@ -11,6 +11,7 @@ import com.landstack.backend.repository.OwnershipRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -19,16 +20,23 @@ public class OwnershipService {
     private final OwnershipRepository ownershipRepository;
     private final OwnerRepository ownerRepository;
     private final LandParcelRepository landParcelRepository;
+    private final AuditLogService auditLogService;
 
     public OwnershipService(
             OwnershipRepository ownershipRepository,
             OwnerRepository ownerRepository,
-            LandParcelRepository landParcelRepository) {
+            LandParcelRepository landParcelRepository,
+            AuditLogService auditLogService) {
 
         this.ownershipRepository = ownershipRepository;
         this.ownerRepository = ownerRepository;
         this.landParcelRepository = landParcelRepository;
+        this.auditLogService = auditLogService;
     }
+
+    // =========================
+    // Get all ownerships
+    // =========================
 
     public List<OwnershipDto> getAllOwnerships() {
 
@@ -37,6 +45,10 @@ public class OwnershipService {
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
+
+    // =========================
+    // Get ownership by ID
+    // =========================
 
     public OwnershipDto getOwnershipById(Long id) {
 
@@ -50,7 +62,12 @@ public class OwnershipService {
         return toDto(ownership);
     }
 
-    public List<OwnershipDto> getOwnershipsByOwner(Long ownerId) {
+    // =========================
+    // Get ownerships by owner
+    // =========================
+
+    public List<OwnershipDto> getOwnershipsByOwner(
+            Long ownerId) {
 
         if (!ownerRepository.existsById(ownerId)) {
             throw new ResourceNotFoundException(
@@ -58,13 +75,19 @@ public class OwnershipService {
             );
         }
 
-        return ownershipRepository.findByOwnerId(ownerId)
+        return ownershipRepository
+                .findByOwnerId(ownerId)
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
-    public List<OwnershipDto> getOwnershipsByParcel(String ulpin) {
+    // =========================
+    // Get ownerships by parcel
+    // =========================
+
+    public List<OwnershipDto> getOwnershipsByParcel(
+            String ulpin) {
 
         if (!landParcelRepository.existsByUlpin(ulpin)) {
             throw new ResourceNotFoundException(
@@ -72,18 +95,26 @@ public class OwnershipService {
             );
         }
 
-        return ownershipRepository.findByParcelUlpin(ulpin)
+        return ownershipRepository
+                .findByParcelUlpin(ulpin)
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
-    public OwnershipDto createOwnership(OwnershipDto dto) {
+    // =========================
+    // Create ownership
+    // =========================
 
-        Owner owner = ownerRepository.findById(dto.getOwnerId())
+    public OwnershipDto createOwnership(
+            OwnershipDto dto) {
+
+        Owner owner = ownerRepository
+                .findById(dto.getOwnerId())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Owner not found: " + dto.getOwnerId()
+                                "Owner not found: "
+                                        + dto.getOwnerId()
                         )
                 );
 
@@ -91,7 +122,8 @@ public class OwnershipService {
                 .findByUlpin(dto.getParcelUlpin())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Parcel not found: " + dto.getParcelUlpin()
+                                "Parcel not found: "
+                                        + dto.getParcelUlpin()
                         )
                 );
 
@@ -101,8 +133,12 @@ public class OwnershipService {
 
         ownership.setOwner(owner);
         ownership.setParcel(parcel);
-        ownership.setOwnershipType(dto.getOwnershipType());
-        ownership.setOwnershipPercentage(dto.getOwnershipPercentage());
+        ownership.setOwnershipType(
+                dto.getOwnershipType()
+        );
+        ownership.setOwnershipPercentage(
+                dto.getOwnershipPercentage()
+        );
         ownership.setValidFrom(dto.getValidFrom());
         ownership.setValidTo(dto.getValidTo());
         ownership.setCurrent(dto.isCurrent());
@@ -110,24 +146,42 @@ public class OwnershipService {
         Ownership savedOwnership =
                 ownershipRepository.save(ownership);
 
+        // Automatic audit log
+        auditLogService.log(
+                "OWNERSHIP",
+                String.valueOf(savedOwnership.getId()),
+                "CREATED",
+                "system",
+                "Ownership record created for parcel "
+                        + savedOwnership.getParcel().getUlpin()
+        );
+
         return toDto(savedOwnership);
     }
+
+    // =========================
+    // Update ownership
+    // =========================
 
     public OwnershipDto updateOwnership(
             Long id,
             OwnershipDto dto) {
 
-        Ownership ownership = ownershipRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Ownership record not found: " + id
-                        )
-                );
+        Ownership ownership =
+                ownershipRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Ownership record not found: "
+                                                + id
+                                )
+                        );
 
-        Owner owner = ownerRepository.findById(dto.getOwnerId())
+        Owner owner = ownerRepository
+                .findById(dto.getOwnerId())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Owner not found: " + dto.getOwnerId()
+                                "Owner not found: "
+                                        + dto.getOwnerId()
                         )
                 );
 
@@ -135,7 +189,8 @@ public class OwnershipService {
                 .findByUlpin(dto.getParcelUlpin())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Parcel not found: " + dto.getParcelUlpin()
+                                "Parcel not found: "
+                                        + dto.getParcelUlpin()
                         )
                 );
 
@@ -143,8 +198,12 @@ public class OwnershipService {
 
         ownership.setOwner(owner);
         ownership.setParcel(parcel);
-        ownership.setOwnershipType(dto.getOwnershipType());
-        ownership.setOwnershipPercentage(dto.getOwnershipPercentage());
+        ownership.setOwnershipType(
+                dto.getOwnershipType()
+        );
+        ownership.setOwnershipPercentage(
+                dto.getOwnershipPercentage()
+        );
         ownership.setValidFrom(dto.getValidFrom());
         ownership.setValidTo(dto.getValidTo());
         ownership.setCurrent(dto.isCurrent());
@@ -152,20 +211,48 @@ public class OwnershipService {
         Ownership updatedOwnership =
                 ownershipRepository.save(ownership);
 
+        // Automatic audit log
+        auditLogService.log(
+                "OWNERSHIP",
+                String.valueOf(updatedOwnership.getId()),
+                "UPDATED",
+                "system",
+                "Ownership record updated"
+        );
+
         return toDto(updatedOwnership);
     }
 
+    // =========================
+    // Delete ownership
+    // =========================
+
     public void deleteOwnership(Long id) {
 
-        Ownership ownership = ownershipRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Ownership record not found: " + id
-                        )
-                );
+        Ownership ownership =
+                ownershipRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Ownership record not found: "
+                                                + id
+                                )
+                        );
+
+        // Create audit before deleting
+        auditLogService.log(
+                "OWNERSHIP",
+                String.valueOf(ownership.getId()),
+                "DELETED",
+                "system",
+                "Ownership record deleted"
+        );
 
         ownershipRepository.delete(ownership);
     }
+
+    // =========================
+    // Ownership validation
+    // =========================
 
     private void validateOwnershipRules(
             OwnershipDto dto,
@@ -173,9 +260,10 @@ public class OwnershipService {
 
         /*
          * Rule 1:
-         * SOLE ownership must represent 100% ownership.
+         * SOLE ownership must represent 100%.
          */
-        if ("SOLE".equalsIgnoreCase(dto.getOwnershipType())
+        if ("SOLE".equalsIgnoreCase(
+                dto.getOwnershipType())
                 && dto.getOwnershipPercentage() != null
                 && dto.getOwnershipPercentage() != 100.0) {
 
@@ -200,12 +288,13 @@ public class OwnershipService {
                             .stream()
                             .filter(existing ->
                                     existingOwnership == null
-                                            || !existing.getId().equals(
+                                            || !Objects.equals(
+                                            existing.getId(),
                                             existingOwnership.getId()
                                     )
                             )
                             .map(Ownership::getOwnershipPercentage)
-                            .filter(java.util.Objects::nonNull)
+                            .filter(Objects::nonNull)
                             .mapToDouble(Double::doubleValue)
                             .sum();
 
@@ -228,28 +317,54 @@ public class OwnershipService {
          */
         if (dto.getValidFrom() != null
                 && dto.getValidTo() != null
-                && dto.getValidTo().isBefore(dto.getValidFrom())) {
+                && dto.getValidTo().isBefore(
+                dto.getValidFrom())) {
 
             throw new IllegalArgumentException(
-                    "Valid-to date cannot be before valid-from date"
+                    "Valid-to date cannot be before "
+                            + "valid-from date"
             );
         }
     }
 
-    private OwnershipDto toDto(Ownership ownership) {
+    // =========================
+    // Entity → DTO
+    // =========================
+
+    private OwnershipDto toDto(
+            Ownership ownership) {
 
         OwnershipDto dto = new OwnershipDto();
 
         dto.setId(ownership.getId());
-        dto.setOwnerId(ownership.getOwner().getId());
-        dto.setParcelUlpin(ownership.getParcel().getUlpin());
-        dto.setOwnershipType(ownership.getOwnershipType());
+
+        dto.setOwnerId(
+                ownership.getOwner().getId()
+        );
+
+        dto.setParcelUlpin(
+                ownership.getParcel().getUlpin()
+        );
+
+        dto.setOwnershipType(
+                ownership.getOwnershipType()
+        );
+
         dto.setOwnershipPercentage(
                 ownership.getOwnershipPercentage()
         );
-        dto.setValidFrom(ownership.getValidFrom());
-        dto.setValidTo(ownership.getValidTo());
-        dto.setCurrent(ownership.isCurrent());
+
+        dto.setValidFrom(
+                ownership.getValidFrom()
+        );
+
+        dto.setValidTo(
+                ownership.getValidTo()
+        );
+
+        dto.setCurrent(
+                ownership.isCurrent()
+        );
 
         return dto;
     }

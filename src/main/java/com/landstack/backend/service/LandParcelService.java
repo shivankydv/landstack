@@ -13,38 +13,38 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import jakarta.persistence.criteria.Predicate;
 
 @Service
 public class LandParcelService {
 
     private final LandParcelRepository landParcelRepository;
+    private final AuditLogService auditLogService;
 
-    public LandParcelService(LandParcelRepository landParcelRepository) {
+    public LandParcelService(
+            LandParcelRepository landParcelRepository,
+            AuditLogService auditLogService) {
+
         this.landParcelRepository = landParcelRepository;
+        this.auditLogService = auditLogService;
     }
 
+    // =========================
+    // Get all parcels
+    // =========================
+
     public List<LandParcelDto> getAllParcels() {
+
         return landParcelRepository.findAll()
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
-    public LandParcelDto getByUlpin(String ulpin) {
-        LandParcel parcel = landParcelRepository.findByUlpin(ulpin)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Parcel not found: " + ulpin
-                        )
-                );
-
-        return toDto(parcel);
-    }
+    // =========================
+    // Search + Filter + Pagination
+    // =========================
 
     public Page<LandParcelDto> searchParcels(
             String ulpin,
@@ -55,96 +55,108 @@ public class LandParcelService {
             Double maxArea,
             Pageable pageable) {
 
-        Specification<LandParcel> specification = (root, query, criteriaBuilder) -> {
+        Specification<LandParcel> specification =
+                (root, query, criteriaBuilder) -> null;
 
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (ulpin != null && !ulpin.isBlank()) {
-                predicates.add(
-                        criteriaBuilder.equal(root.get("ulpin"), ulpin)
-                );
-            }
-
-            if (name != null && !name.isBlank()) {
-                predicates.add(
-                        criteriaBuilder.like(
-                                criteriaBuilder.lower(root.get("name")),
-                                "%" + name.toLowerCase() + "%"
-                        )
-                );
-            }
-
-            if (propertyType != null && !propertyType.isBlank()) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                criteriaBuilder.lower(root.get("propertyType")),
-                                propertyType.toLowerCase()
-                        )
-                );
-            }
-
-            if (address != null && !address.isBlank()) {
-                predicates.add(
-                        criteriaBuilder.like(
-                                criteriaBuilder.lower(root.get("address")),
-                                "%" + address.toLowerCase() + "%"
-                        )
-                );
-            }
-
-            if (minArea != null) {
-                predicates.add(
-                        criteriaBuilder.greaterThanOrEqualTo(
-                                root.get("area"),
-                                minArea
-                        )
-                );
-            }
-
-            if (maxArea != null) {
-                predicates.add(
-                        criteriaBuilder.lessThanOrEqualTo(
-                                root.get("area"),
-                                maxArea
-                        )
-                );
-            }
-
-            return criteriaBuilder.and(
-                    predicates.toArray(new Predicate[0])
+        if (ulpin != null && !ulpin.isBlank()) {
+            specification = specification.and(
+                    (root, query, criteriaBuilder) ->
+                            criteriaBuilder.like(
+                                    criteriaBuilder.lower(
+                                            root.get("ulpin")
+                                    ),
+                                    "%" + ulpin.toLowerCase() + "%"
+                            )
             );
-        };
+        }
+
+        if (name != null && !name.isBlank()) {
+            specification = specification.and(
+                    (root, query, criteriaBuilder) ->
+                            criteriaBuilder.like(
+                                    criteriaBuilder.lower(
+                                            root.get("name")
+                                    ),
+                                    "%" + name.toLowerCase() + "%"
+                            )
+            );
+        }
+
+        if (propertyType != null && !propertyType.isBlank()) {
+            specification = specification.and(
+                    (root, query, criteriaBuilder) ->
+                            criteriaBuilder.equal(
+                                    criteriaBuilder.lower(
+                                            root.get("propertyType")
+                                    ),
+                                    propertyType.toLowerCase()
+                            )
+            );
+        }
+
+        if (address != null && !address.isBlank()) {
+            specification = specification.and(
+                    (root, query, criteriaBuilder) ->
+                            criteriaBuilder.like(
+                                    criteriaBuilder.lower(
+                                            root.get("address")
+                                    ),
+                                    "%" + address.toLowerCase() + "%"
+                            )
+            );
+        }
+
+        if (minArea != null) {
+            specification = specification.and(
+                    (root, query, criteriaBuilder) ->
+                            criteriaBuilder.greaterThanOrEqualTo(
+                                    root.get("area"),
+                                    minArea
+                            )
+            );
+        }
+
+        if (maxArea != null) {
+            specification = specification.and(
+                    (root, query, criteriaBuilder) ->
+                            criteriaBuilder.lessThanOrEqualTo(
+                                    root.get("area"),
+                                    maxArea
+                            )
+            );
+        }
 
         return landParcelRepository
                 .findAll(specification, pageable)
                 .map(this::toDto);
     }
 
-    private LandParcelDto toDto(LandParcel parcel) {
-        LandParcelDto dto = new LandParcelDto();
+    // =========================
+    // Get parcel by ULPIN
+    // =========================
 
-        dto.setUlpin(parcel.getUlpin());
-        dto.setName(parcel.getName());
-        dto.setPropertyType(parcel.getPropertyType());
-        dto.setPlotReference(parcel.getPlotReference());
-        dto.setArea(parcel.getArea());
-        dto.setAreaUnit(parcel.getAreaUnit());
-        dto.setAddress(parcel.getAddress());
-        dto.setDemoData(parcel.isDemoData());
+    public LandParcelDto getByUlpin(String ulpin) {
 
-        if (parcel.getGeometry() != null) {
-            dto.setLatitude(parcel.getGeometry().getY());
-            dto.setLongitude(parcel.getGeometry().getX());
-        }
+        LandParcel parcel = landParcelRepository.findByUlpin(ulpin)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Parcel not found: " + ulpin
+                        )
+                );
 
-        return dto;
+        return toDto(parcel);
     }
+
+    // =========================
+    // Create parcel
+    // =========================
 
     public LandParcelDto createParcel(LandParcelDto dto) {
 
         if (landParcelRepository.existsByUlpin(dto.getUlpin())) {
             throw new DuplicateResourceException(
-                    "Parcel already exists with ULPIN: " + dto.getUlpin()
+                    "Parcel already exists with ULPIN: "
+                            + dto.getUlpin()
             );
         }
 
@@ -154,12 +166,28 @@ public class LandParcelService {
 
         applyDtoToEntity(dto, parcel);
 
-        LandParcel savedParcel = landParcelRepository.save(parcel);
+        LandParcel savedParcel =
+                landParcelRepository.save(parcel);
+
+        // Automatic audit log
+        auditLogService.log(
+                "LAND_PARCEL",
+                savedParcel.getUlpin(),
+                "CREATED",
+                "system",
+                "Land parcel created"
+        );
 
         return toDto(savedParcel);
     }
 
-    public LandParcelDto updateParcel(String ulpin, LandParcelDto dto) {
+    // =========================
+    // Update parcel
+    // =========================
+
+    public LandParcelDto updateParcel(
+            String ulpin,
+            LandParcelDto dto) {
 
         LandParcel parcel = landParcelRepository.findByUlpin(ulpin)
                 .orElseThrow(() ->
@@ -168,13 +196,27 @@ public class LandParcelService {
                         )
                 );
 
-        // ULPIN itself is not changed via update; it is the lookup key
+        // ULPIN is the lookup key and is not changed
         applyDtoToEntity(dto, parcel);
 
-        LandParcel updatedParcel = landParcelRepository.save(parcel);
+        LandParcel updatedParcel =
+                landParcelRepository.save(parcel);
+
+        // Automatic audit log
+        auditLogService.log(
+                "LAND_PARCEL",
+                updatedParcel.getUlpin(),
+                "UPDATED",
+                "system",
+                "Land parcel updated"
+        );
 
         return toDto(updatedParcel);
     }
+
+    // =========================
+    // Delete parcel
+    // =========================
 
     public void deleteParcel(String ulpin) {
 
@@ -185,10 +227,25 @@ public class LandParcelService {
                         )
                 );
 
+        // Create audit before deleting
+        auditLogService.log(
+                "LAND_PARCEL",
+                parcel.getUlpin(),
+                "DELETED",
+                "system",
+                "Land parcel deleted"
+        );
+
         landParcelRepository.delete(parcel);
     }
 
-    private void applyDtoToEntity(LandParcelDto dto, LandParcel parcel) {
+    // =========================
+    // Apply DTO → Entity
+    // =========================
+
+    private void applyDtoToEntity(
+            LandParcelDto dto,
+            LandParcel parcel) {
 
         parcel.setName(dto.getName());
         parcel.setPropertyType(dto.getPropertyType());
@@ -198,9 +255,11 @@ public class LandParcelService {
         parcel.setAddress(dto.getAddress());
         parcel.setDemoData(dto.isDemoData());
 
-        if (dto.getLatitude() != null && dto.getLongitude() != null) {
+        if (dto.getLatitude() != null
+                && dto.getLongitude() != null) {
 
-            GeometryFactory geometryFactory = new GeometryFactory();
+            GeometryFactory geometryFactory =
+                    new GeometryFactory();
 
             Point point = geometryFactory.createPoint(
                     new Coordinate(
@@ -213,5 +272,36 @@ public class LandParcelService {
 
             parcel.setGeometry(point);
         }
+    }
+
+    // =========================
+    // Entity → DTO
+    // =========================
+
+    private LandParcelDto toDto(LandParcel parcel) {
+
+        LandParcelDto dto = new LandParcelDto();
+
+        dto.setUlpin(parcel.getUlpin());
+        dto.setName(parcel.getName());
+        dto.setPropertyType(parcel.getPropertyType());
+        dto.setPlotReference(parcel.getPlotReference());
+        dto.setArea(parcel.getArea());
+        dto.setAreaUnit(parcel.getAreaUnit());
+        dto.setAddress(parcel.getAddress());
+        dto.setDemoData(parcel.isDemoData());
+
+        if (parcel.getGeometry() != null) {
+
+            dto.setLatitude(
+                    parcel.getGeometry().getY()
+            );
+
+            dto.setLongitude(
+                    parcel.getGeometry().getX()
+            );
+        }
+
+        return dto;
     }
 }
